@@ -17,7 +17,7 @@ pub fn build(b: *std.build.Builder) void {
 
 pub fn buildTests(
     b: *std.build.Builder,
-    optimize: std.builtin.Mode,
+    optimize: std.builtin.OptimizeMode,
     target: std.zig.CrossTarget,
 ) *std.build.LibExeObjStep {
     const tests = b.addTest(.{
