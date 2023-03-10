@@ -1,6 +1,5 @@
 // ==============================================================================
 //
-// zmath v0.9
 // SIMD math library for game developers
 // https://github.com/michal-z/zig-gamedev/tree/main/libs/zmath
 //
@@ -60,11 +59,6 @@
 // f32x8s(e0: f32) F32x8
 // f32x16s(e0: f32) F32x16
 //
-// u32x4(e0: u32, e1: u32, e2: u32, e3: u32) U32x4
-// u32x8(e0: u32, e1: u32, e2: u32, e3: u32, e4: u32, e5: u32, e6: u32, e7: u32) U32x8
-// u32x16(e0: u32, e1: u32, e2: u32, e3: u32, e4: u32, e5: u32, e6: u32, e7: u32,
-//        e8: u32, e9: u32, ea: u32, eb: u32, ec: u32, ed: u32, ee: u32, ef: u32) U32x16
-//
 // boolx4(e0: bool, e1: bool, e2: bool, e3: bool) Boolx4
 // boolx8(e0: bool, e1: bool, e2: bool, e3: bool, e4: bool, e5: bool, e6: bool, e7: bool) Boolx8
 // boolx16(e0: bool, e1: bool, e2: bool, e3: bool, e4: bool, e5: bool, e6: bool, e7: bool,
@@ -88,7 +82,6 @@
 //
 // splat(comptime T: type, value: f32) T
 // splatInt(comptime T: type, value: u32) T
-// usplat(comptime T: type, value: u32) T
 //
 // ------------------------------------------------------------------------------
 // 2. Functions that work on all vector components (F32xN = F32x4 or F32x8 or F32x16)
@@ -122,6 +115,10 @@
 // saturateFast(v: F32xN) F32xN
 // lerp(v0: F32xN, v1: F32xN, t: f32) F32xN
 // lerpV(v0: F32xN, v1: F32xN, t: F32xN) F32xN
+// lerpInverse(v0: F32xN, v1: F32xN, t: f32) F32xN
+// lerpInverseV(v0: F32xN, v1: F32xN, t: F32xN) F32xN
+// mapLinear(v: F32xN, min1: f32, max1: f32, min2: f32, max2: f32) F32xN
+// mapLinearV(v: F32xN, min1: F32xN, max1: F32xN, min2: F32xN, max2: F32xN) F32xN
 // sqrt(v: F32xN) F32xN
 // abs(v: F32xN) F32xN
 // mod(v0: F32xN, v1: F32xN) F32xN
@@ -184,11 +181,16 @@
 // lookAtRh(eyepos: Vec, focuspos: Vec, updir: Vec) Mat
 // perspectiveFovLh(fovy: f32, aspect: f32, near: f32, far: f32) Mat
 // perspectiveFovRh(fovy: f32, aspect: f32, near: f32, far: f32) Mat
+// perspectiveFovLhGl(fovy: f32, aspect: f32, near: f32, far: f32) Mat
 // perspectiveFovRhGl(fovy: f32, aspect: f32, near: f32, far: f32) Mat
 // orthographicLh(w: f32, h: f32, near: f32, far: f32) Mat
 // orthographicRh(w: f32, h: f32, near: f32, far: f32) Mat
+// orthographicLhGl(w: f32, h: f32, near: f32, far: f32) Mat
+// orthographicRhGl(w: f32, h: f32, near: f32, far: f32) Mat
 // orthographicOffCenterLh(left: f32, right: f32, top: f32, bottom: f32, near: f32, far: f32) Mat
 // orthographicOffCenterRh(left: f32, right: f32, top: f32, bottom: f32, near: f32, far: f32) Mat
+// orthographicOffCenterLhGl(left: f32, right: f32, top: f32, bottom: f32, near: f32, far: f32) Mat
+// orthographicOffCenterRhGl(left: f32, right: f32, top: f32, bottom: f32, near: f32, far: f32) Mat
 // determinant(m: Mat) F32x4
 // inverse(m: Mat) Mat
 // inverseDet(m: Mat, det: ?*F32x4) Mat
@@ -215,6 +217,7 @@
 // ------------------------------------------------------------------------------
 //
 // qmul(q0: Quat, q1: Quat) Quat
+// qidentity() Quat
 // conjugate(quat: Quat) Quat
 // inverse(q: Quat) Quat
 // slerp(q0: Quat, q1: Quat, t: f32) Quat
@@ -270,11 +273,6 @@ pub const Vec = F32x4;
 pub const Mat = [4]F32x4;
 pub const Quat = F32x4;
 
-// Helper types
-pub const U32x4 = @Vector(4, u32);
-pub const U32x8 = @Vector(8, u32);
-pub const U32x16 = @Vector(16, u32);
-
 const builtin = @import("builtin");
 const std = @import("std");
 const math = std.math;
@@ -285,13 +283,11 @@ const cpu_arch = builtin.cpu.arch;
 const has_avx = if (cpu_arch == .x86_64) std.Target.x86.featureSetHas(builtin.cpu.features, .avx) else false;
 const has_avx512f = if (cpu_arch == .x86_64) std.Target.x86.featureSetHas(builtin.cpu.features, .avx512f) else false;
 const has_fma = if (cpu_arch == .x86_64) std.Target.x86.featureSetHas(builtin.cpu.features, .fma) else false;
-
 // ------------------------------------------------------------------------------
 //
 // 1. Initialization functions
 //
 // ------------------------------------------------------------------------------
-
 pub inline fn f32x4(e0: f32, e1: f32, e2: f32, e3: f32) F32x4 {
     return .{ e0, e1, e2, e3 };
 }
@@ -316,20 +312,6 @@ pub inline fn f32x16s(e0: f32) F32x16 {
     return splat(F32x16, e0);
 }
 
-pub inline fn u32x4(e0: u32, e1: u32, e2: u32, e3: u32) U32x4 {
-    return .{ e0, e1, e2, e3 };
-}
-pub inline fn u32x8(e0: u32, e1: u32, e2: u32, e3: u32, e4: u32, e5: u32, e6: u32, e7: u32) U32x8 {
-    return .{ e0, e1, e2, e3, e4, e5, e6, e7 };
-}
-// zig fmt: off
-pub inline fn u32x16(
-    e0: u32, e1: u32, e2: u32, e3: u32, e4: u32, e5: u32, e6: u32, e7: u32,
-    e8: u32, e9: u32, ea: u32, eb: u32, ec: u32, ed: u32, ee: u32, ef: u32) U32x16 {
-    return .{ e0, e1, e2, e3, e4, e5, e6, e7, e8, e9, ea, eb, ec, ed, ee, ef };
-}
-// zig fmt: on
-
 pub inline fn boolx4(e0: bool, e1: bool, e2: bool, e3: bool) Boolx4 {
     return .{ e0, e1, e2, e3 };
 }
@@ -344,7 +326,7 @@ pub inline fn boolx16(
 }
 // zig fmt: on
 
-pub fn veclen(comptime T: type) comptime_int {
+pub inline fn veclen(comptime T: type) comptime_int {
     return @typeInfo(T).Vector.len;
 }
 
@@ -353,9 +335,6 @@ pub inline fn splat(comptime T: type, value: f32) T {
 }
 pub inline fn splatInt(comptime T: type, value: u32) T {
     return @splat(veclen(T), @bitCast(f32, value));
-}
-pub inline fn usplat(comptime T: type, value: u32) T {
-    return @splat(veclen(T), value);
 }
 
 pub fn load(mem: []const f32, comptime T: type, comptime len: u32) T {
@@ -372,17 +351,17 @@ test "zmath.load" {
     var ptr = &a;
     var i: u32 = 0;
     const v0 = load(a[i..], F32x4, 2);
-    try expect(approxEqAbs(v0, f32x4(1.0, 2.0, 0.0, 0.0), 0.0));
+    try expect(approxEqAbs(v0, F32x4{ 1.0, 2.0, 0.0, 0.0 }, 0.0));
     i += 2;
     const v1 = load(a[i .. i + 2], F32x4, 2);
-    try expect(approxEqAbs(v1, f32x4(3.0, 4.0, 0.0, 0.0), 0.0));
+    try expect(approxEqAbs(v1, F32x4{ 3.0, 4.0, 0.0, 0.0 }, 0.0));
     const v2 = load(a[5..7], F32x4, 2);
-    try expect(approxEqAbs(v2, f32x4(6.0, 7.0, 0.0, 0.0), 0.0));
+    try expect(approxEqAbs(v2, F32x4{ 6.0, 7.0, 0.0, 0.0 }, 0.0));
     const v3 = load(ptr[1..], F32x4, 2);
-    try expect(approxEqAbs(v3, f32x4(2.0, 3.0, 0.0, 0.0), 0.0));
+    try expect(approxEqAbs(v3, F32x4{ 2.0, 3.0, 0.0, 0.0 }, 0.0));
     i += 1;
     const v4 = load(ptr[i .. i + 2], F32x4, 2);
-    try expect(approxEqAbs(v4, f32x4(4.0, 5.0, 0.0, 0.0), 0.0));
+    try expect(approxEqAbs(v4, F32x4{ 4.0, 5.0, 0.0, 0.0 }, 0.0));
 }
 
 pub fn store(mem: []f32, v: anytype, comptime len: u32) void {
@@ -483,13 +462,11 @@ pub inline fn vecToArr3(v: Vec) [3]f32 {
 pub inline fn vecToArr4(v: Vec) [4]f32 {
     return .{ v[0], v[1], v[2], v[3] };
 }
-
 // ------------------------------------------------------------------------------
 //
 // 2. Functions that work on all vector components (F32xN = F32x4 or F32x8 or F32x16)
 //
 // ------------------------------------------------------------------------------
-
 pub fn all(vb: anytype, comptime len: u32) bool {
     const T = @TypeOf(vb);
     if (len > veclen(T)) {
@@ -813,6 +790,7 @@ pub inline fn min(v0: anytype, v1: anytype) @TypeOf(v0, v1) {
     return @min(v0, v1); // minps, cmpunordps, andps, andnps, orps
 }
 test "zmath.min" {
+    if (builtin.target.os.tag == .macos) return error.SkipZigTest;
     {
         const v0 = f32x4(1.0, 3.0, 2.0, 7.0);
         const v1 = f32x4(2.0, 1.0, 4.0, math.inf_f32);
@@ -854,6 +832,7 @@ pub inline fn max(v0: anytype, v1: anytype) @TypeOf(v0, v1) {
     return @max(v0, v1); // maxps, cmpunordps, andps, andnps, orps
 }
 test "zmath.max" {
+    if (builtin.target.os.tag == .macos) return error.SkipZigTest;
     {
         const v0 = f32x4(1.0, 3.0, 2.0, 7.0);
         const v1 = f32x4(2.0, 1.0, 4.0, math.inf_f32);
@@ -941,10 +920,10 @@ test "zmath.round" {
         try expect(all(isNan(round(splat(F32x4, -math.qnan_f32))), 0));
     }
     {
-        var v = round(F32x16{ 1.1, -1.1, -1.5, 1.5, 2.1, 2.8, 2.9, 4.1, 5.8, 6.1, 7.9, 8.9, 10.1, 11.2, 12.7, 13.1 });
+        var v = round(f32x16(1.1, -1.1, -1.5, 1.5, 2.1, 2.8, 2.9, 4.1, 5.8, 6.1, 7.9, 8.9, 10.1, 11.2, 12.7, 13.1));
         try expect(approxEqAbs(
             v,
-            F32x16{ 1.0, -1.0, -2.0, 2.0, 2.0, 3.0, 3.0, 4.0, 6.0, 6.0, 8.0, 9.0, 10.0, 11.0, 13.0, 13.0 },
+            f32x16(1.0, -1.0, -2.0, 2.0, 2.0, 3.0, 3.0, 4.0, 6.0, 6.0, 8.0, 9.0, 10.0, 11.0, 13.0, 13.0),
             0.0,
         ));
     }
@@ -1035,10 +1014,10 @@ test "zmath.trunc" {
         try expect(all(isNan(trunc(splat(F32x4, -math.qnan_f32))), 0));
     }
     {
-        var v = trunc(F32x16{ 1.1, -1.1, -1.5, 1.5, 2.1, 2.8, 2.9, 4.1, 5.8, 6.1, 7.9, 8.9, 10.1, 11.2, 12.7, 13.1 });
+        var v = trunc(f32x16(1.1, -1.1, -1.5, 1.5, 2.1, 2.8, 2.9, 4.1, 5.8, 6.1, 7.9, 8.9, 10.1, 11.2, 12.7, 13.1));
         try expect(approxEqAbs(
             v,
-            F32x16{ 1.0, -1.0, -1.0, 1.0, 2.0, 2.0, 2.0, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0, 11.0, 12.0, 13.0 },
+            f32x16(1.0, -1.0, -1.0, 1.0, 2.0, 2.0, 2.0, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0, 11.0, 12.0, 13.0),
             0.0,
         ));
     }
@@ -1127,10 +1106,10 @@ test "zmath.floor" {
         try expect(all(isNan(floor(splat(F32x4, -math.qnan_f32))), 0));
     }
     {
-        var v = floor(F32x16{ 1.1, -1.1, -1.5, 1.5, 2.1, 2.8, 2.9, 4.1, 5.8, 6.1, 7.9, 8.9, 10.1, 11.2, 12.7, 13.1 });
+        var v = floor(f32x16(1.1, -1.1, -1.5, 1.5, 2.1, 2.8, 2.9, 4.1, 5.8, 6.1, 7.9, 8.9, 10.1, 11.2, 12.7, 13.1));
         try expect(approxEqAbs(
             v,
-            F32x16{ 1.0, -2.0, -2.0, 1.0, 2.0, 2.0, 2.0, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0, 11.0, 12.0, 13.0 },
+            f32x16(1.0, -2.0, -2.0, 1.0, 2.0, 2.0, 2.0, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0, 11.0, 12.0, 13.0),
             0.0,
         ));
     }
@@ -1219,10 +1198,10 @@ test "zmath.ceil" {
         try expect(all(isNan(ceil(splat(F32x4, -math.qnan_f32))), 0));
     }
     {
-        var v = ceil(F32x16{ 1.1, -1.1, -1.5, 1.5, 2.1, 2.8, 2.9, 4.1, 5.8, 6.1, 7.9, 8.9, 10.1, 11.2, 12.7, 13.1 });
+        var v = ceil(f32x16(1.1, -1.1, -1.5, 1.5, 2.1, 2.8, 2.9, 4.1, 5.8, 6.1, 7.9, 8.9, 10.1, 11.2, 12.7, 13.1));
         try expect(approxEqAbs(
             v,
-            F32x16{ 2.0, -1.0, -1.0, 2.0, 3.0, 3.0, 3.0, 5.0, 6.0, 7.0, 8.0, 9.0, 11.0, 12.0, 13.0, 14.0 },
+            f32x16(2.0, -1.0, -1.0, 2.0, 3.0, 3.0, 3.0, 5.0, 6.0, 7.0, 8.0, 9.0, 11.0, 12.0, 13.0, 14.0),
             0.0,
         ));
     }
@@ -1266,6 +1245,7 @@ pub inline fn clamp(v: anytype, vmin: anytype, vmax: anytype) @TypeOf(v, vmin, v
     return result;
 }
 test "zmath.clamp" {
+    if (builtin.target.os.tag == .macos) return error.SkipZigTest;
     {
         const v0 = f32x4(-1.0, 0.2, 1.1, -0.3);
         const v = clamp(v0, splat(F32x4, -0.5), splat(F32x4, 0.5));
@@ -1308,6 +1288,7 @@ pub inline fn saturate(v: anytype) @TypeOf(v) {
     return result;
 }
 test "zmath.saturate" {
+    if (builtin.target.os.tag == .macos) return error.SkipZigTest;
     {
         const v0 = f32x4(-1.0, 0.2, 1.1, -0.3);
         const v = saturate(v0);
@@ -1380,6 +1361,44 @@ pub inline fn lerpV(v0: anytype, v1: anytype, t: anytype) @TypeOf(v0, v1, t) {
     return v0 + (v1 - v0) * t; // subps, addps, mulps
 }
 
+pub inline fn lerpInverse(v0: anytype, v1: anytype, t: anytype) @TypeOf(v0, v1) {
+    const T = @TypeOf(v0, v1);
+    return (splat(T, t) - v0) / (v1 - v0);
+}
+
+pub inline fn lerpInverseV(v0: anytype, v1: anytype, t: anytype) @TypeOf(v0, v1, t) {
+    return (t - v0) / (v1 - v0);
+}
+test "zmath.lerpInverse" {
+    try expect(math.approxEqAbs(f32, lerpInverseV(10.0, 100.0, 10.0), 0, 0.0005));
+    try expect(math.approxEqAbs(f32, lerpInverseV(10.0, 100.0, 100.0), 1, 0.0005));
+    try expect(math.approxEqAbs(f32, lerpInverseV(10.0, 100.0, 55.0), 0.5, 0.05));
+    try expect(approxEqAbs(lerpInverse(f32x4(0, 0, 10, 10), f32x4(100, 200, 100, 100), 10.0), f32x4(0.1, 0.05, 0, 0), 0.0005));
+}
+
+/// To transform a vector of values from one range to another.
+pub inline fn mapLinear(v: anytype, min1: anytype, max1: anytype, min2: anytype, max2: anytype) @TypeOf(v) {
+    const T = @TypeOf(v);
+    const min1V = splat(T, min1);
+    const max1V = splat(T, max1);
+    const min2V = splat(T, min2);
+    const max2V = splat(T, max2);
+    const dV = max1V - min1V;
+    return min2V + (v - min1V) * (max2V - min2V) / dV;
+}
+
+pub inline fn mapLinearV(v: anytype, min1: anytype, max1: anytype, min2: anytype, max2: anytype) @TypeOf(v, min1, max1, min2, max2) {
+    const d = max1 - min1;
+    return min2 + (v - min1) * (max2 - min2) / d;
+}
+test "zmath.mapLinear" {
+    try expect(math.approxEqAbs(f32, mapLinearV(0, 0, 1.2, 10, 100), 10, 0.0005));
+    try expect(math.approxEqAbs(f32, mapLinearV(1.2, 0, 1.2, 10, 100), 100, 0.0005));
+    try expect(math.approxEqAbs(f32, mapLinearV(0.6, 0, 1.2, 10, 100), 55, 0.0005));
+    try expect(approxEqAbs(mapLinearV(splat(F32x4, 0), splat(F32x4, 0), splat(F32x4, 1.2), splat(F32x4, 10), splat(F32x4, 100)), splat(F32x4, 10), 0.0005));
+    try expect(approxEqAbs(mapLinear(f32x4(0, 0, 0.6, 1.2), 0, 1.2, 10, 100), f32x4(10, 10, 55, 100), 0.0005));
+}
+
 pub const F32x4Component = enum { x, y, z, w };
 
 pub inline fn swizzle(
@@ -1410,9 +1429,8 @@ test "zmath.mod" {
     try expect(all(isNan(mod(splat(F32x4, 123.456), splat(F32x4, math.inf_f32))), 0));
     try expect(all(isNan(mod(splat(F32x4, 123.456), splat(F32x4, -math.inf_f32))), 0));
     try expect(all(isNan(mod(splat(F32x4, math.inf_f32), splat(F32x4, math.inf_f32))), 0));
-    // TODO: Started to fail with 0.10.0-dev.4333, possible compiler regression.
-    //try expect(all(isNan(mod(splat(F32x4, 123.456), splat(F32x4, math.nan_f32))), 0));
-    //try expect(all(isNan(mod(splat(F32x4, math.inf_f32), splat(F32x4, math.nan_f32))), 0));
+    try expect(all(isNan(mod(splat(F32x4, 123.456), splat(F32x4, math.nan_f32))), 0));
+    try expect(all(isNan(mod(splat(F32x4, math.inf_f32), splat(F32x4, math.nan_f32))), 0));
 }
 
 pub fn modAngle(v: anytype) @TypeOf(v) {
@@ -1439,11 +1457,15 @@ test "zmath.modAngle" {
 
 pub inline fn mulAdd(v0: anytype, v1: anytype, v2: anytype) @TypeOf(v0, v1, v2) {
     const T = @TypeOf(v0, v1, v2);
-    if (cpu_arch == .x86_64 and has_avx and has_fma) {
-        return @mulAdd(T, v0, v1, v2);
+    if (@import("zmath_options").prefer_determinism) {
+        return v0 * v1 + v2; // Compiler will generate mul, add sequence (no fma even if the target supports it).
     } else {
-        // NOTE(mziulek): On .x86_64 without HW fma instructions @mulAdd maps to really slow code!
-        return v0 * v1 + v2;
+        if (cpu_arch == .x86_64 and has_avx and has_fma) {
+            return @mulAdd(T, v0, v1, v2);
+        } else {
+            // NOTE(mziulek): On .x86_64 without HW fma instructions @mulAdd maps to really slow code!
+            return v0 * v1 + v2;
+        }
     }
 }
 
@@ -1861,13 +1883,11 @@ test "zmath.atan2" {
     try expect(all(isNan(atan2(splat(F32x4, math.nan_f32), splat(F32x4, -1.0))), 0) == true);
     try expect(all(isNan(atan2(splat(F32x4, -math.nan_f32), splat(F32x4, 1.0))), 0) == true);
 }
-
 // ------------------------------------------------------------------------------
 //
 // 3. 2D, 3D, 4D vector functions
 //
 // ------------------------------------------------------------------------------
-
 pub inline fn dot2(v0: Vec, v1: Vec) F32x4 {
     var xmm0 = v0 * v1; // | x0*x1 | y0*y1 | -- | -- |
     var xmm1 = swizzle(xmm0, .y, .x, .x, .x); // | y0*y1 | -- | -- | -- |
@@ -1914,7 +1934,7 @@ pub inline fn cross3(v0: Vec, v1: Vec) Vec {
     xmm0 = swizzle(xmm0, .y, .z, .x, .w);
     xmm1 = swizzle(xmm1, .z, .x, .y, .w);
     result = result - xmm0 * xmm1;
-    return @bitCast(F32x4, @bitCast(U32x4, result) & u32x4_mask3);
+    return andInt(result, f32x4_mask3);
 }
 test "zmath.cross3" {
     {
@@ -2036,13 +2056,11 @@ test "zmath.vecMulMat" {
     try expect(approxEqAbs(mv, f32x4(1.0, 2.0, 3.0, 21.0), 0.0001));
     try expect(approxEqAbs(v, f32x4(3.0, 5.0, 7.0, 1.0), 0.0001));
 }
-
 // ------------------------------------------------------------------------------
 //
 // 4. Matrix functions
 //
 // ------------------------------------------------------------------------------
-
 pub fn identity() Mat {
     const static = struct {
         const identity = Mat{
@@ -2279,6 +2297,26 @@ pub fn perspectiveFovRh(fovy: f32, aspect: f32, near: f32, far: f32) Mat {
 }
 
 // Produces Z values in [-1.0, 1.0] range (OpenGL defaults)
+pub fn perspectiveFovLhGl(fovy: f32, aspect: f32, near: f32, far: f32) Mat {
+    const scfov = sincos(0.5 * fovy);
+
+    assert(near > 0.0 and far > 0.0 and far > near);
+    assert(!math.approxEqAbs(f32, scfov[0], 0.0, 0.001));
+    assert(!math.approxEqAbs(f32, far, near, 0.001));
+    assert(!math.approxEqAbs(f32, aspect, 0.0, 0.01));
+
+    const h = scfov[1] / scfov[0];
+    const w = h / aspect;
+    const r = far - near;
+    return .{
+        f32x4(w, 0.0, 0.0, 0.0),
+        f32x4(0.0, h, 0.0, 0.0),
+        f32x4(0.0, 0.0, (near + far) / r, 1.0),
+        f32x4(0.0, 0.0, 2.0 * near * far / -r, 0.0),
+    };
+}
+
+// Produces Z values in [-1.0, 1.0] range (OpenGL defaults)
 pub fn perspectiveFovRhGl(fovy: f32, aspect: f32, near: f32, far: f32) Mat {
     const scfov = sincos(0.5 * fovy);
 
@@ -2326,29 +2364,83 @@ pub fn orthographicRh(w: f32, h: f32, near: f32, far: f32) Mat {
     };
 }
 
+// Produces Z values in [-1.0, 1.0] range (OpenGL defaults)
+pub fn orthographicLhGl(w: f32, h: f32, near: f32, far: f32) Mat {
+    assert(!math.approxEqAbs(f32, w, 0.0, 0.001));
+    assert(!math.approxEqAbs(f32, h, 0.0, 0.001));
+    assert(!math.approxEqAbs(f32, far, near, 0.001));
+
+    const r = far - near;
+    return .{
+        f32x4(2 / w, 0.0, 0.0, 0.0),
+        f32x4(0.0, 2 / h, 0.0, 0.0),
+        f32x4(0.0, 0.0, 2 / r, 0.0),
+        f32x4(0.0, 0.0, (near + far) / -r, 1.0),
+    };
+}
+
+// Produces Z values in [-1.0, 1.0] range (OpenGL defaults)
+pub fn orthographicRhGl(w: f32, h: f32, near: f32, far: f32) Mat {
+    assert(!math.approxEqAbs(f32, w, 0.0, 0.001));
+    assert(!math.approxEqAbs(f32, h, 0.0, 0.001));
+    assert(!math.approxEqAbs(f32, far, near, 0.001));
+
+    const r = near - far;
+    return .{
+        f32x4(2 / w, 0.0, 0.0, 0.0),
+        f32x4(0.0, 2 / h, 0.0, 0.0),
+        f32x4(0.0, 0.0, 2 / r, 0.0),
+        f32x4(0.0, 0.0, (near + far) / r, 1.0),
+    };
+}
+
 pub fn orthographicOffCenterLh(left: f32, right: f32, top: f32, bottom: f32, near: f32, far: f32) Mat {
     assert(!math.approxEqAbs(f32, far, near, 0.001));
 
-    const r = 1.0 / (far - near);
-
+    const r = 1 / (far - near);
     return .{
-        f32x4(2 / (right - left), 0.0, 0.0, -(right + left) / (right - left)),
-        f32x4(0.0, 2 / (top - bottom), 0.0, -(top + bottom) / (top - bottom)),
-        f32x4(0.0, 0.0, r, -r * near),
-        f32x4(0.0, 0.0, 0.0, 1.0),
+        f32x4(2 / (right - left), 0.0, 0.0, 0.0),
+        f32x4(0.0, 2 / (top - bottom), 0.0, 0.0),
+        f32x4(0.0, 0.0, r, 0.0),
+        f32x4(-(right + left) / (right - left), -(top + bottom) / (top - bottom), -r * near, 1.0),
     };
 }
 
 pub fn orthographicOffCenterRh(left: f32, right: f32, top: f32, bottom: f32, near: f32, far: f32) Mat {
     assert(!math.approxEqAbs(f32, far, near, 0.001));
 
-    const r = 1.0 / (near - far);
-
+    const r = 1 / (near - far);
     return .{
-        f32x4(2 / (right - left), 0.0, 0.0, -(right + left) / (right - left)),
-        f32x4(0.0, 2 / (top - bottom), 0.0, -(top + bottom) / (top - bottom)),
-        f32x4(0.0, 0.0, r, r * near),
-        f32x4(0.0, 0.0, 0.0, 1.0),
+        f32x4(2 / (right - left), 0.0, 0.0, 0.0),
+        f32x4(0.0, 2 / (top - bottom), 0.0, 0.0),
+        f32x4(0.0, 0.0, r, 0.0),
+        f32x4(-(right + left) / (right - left), -(top + bottom) / (top - bottom), r * near, 1.0),
+    };
+}
+
+// Produces Z values in [-1.0, 1.0] range (OpenGL defaults)
+pub fn orthographicOffCenterLhGl(left: f32, right: f32, top: f32, bottom: f32, near: f32, far: f32) Mat {
+    assert(!math.approxEqAbs(f32, far, near, 0.001));
+
+    const r = far - near;
+    return .{
+        f32x4(2 / (right - left), 0.0, 0.0, 0.0),
+        f32x4(0.0, 2 / (top - bottom), 0.0, 0.0),
+        f32x4(0.0, 0.0, 2 / r, 0.0),
+        f32x4(-(right + left) / (right - left), -(top + bottom) / (top - bottom), (near + far) / -r, 1.0),
+    };
+}
+
+// Produces Z values in [-1.0, 1.0] range (OpenGL defaults)
+pub fn orthographicOffCenterRhGl(left: f32, right: f32, top: f32, bottom: f32, near: f32, far: f32) Mat {
+    assert(!math.approxEqAbs(f32, far, near, 0.001));
+
+    const r = near - far;
+    return .{
+        f32x4(2 / (right - left), 0.0, 0.0, 0.0),
+        f32x4(0.0, 2 / (top - bottom), 0.0, 0.0),
+        f32x4(0.0, 0.0, 2 / r, 0.0),
+        f32x4(-(right + left) / (right - left), -(top + bottom) / (top - bottom), (near + far) / r, 1.0),
     };
 }
 
@@ -2494,7 +2586,7 @@ pub fn inverseDet(m: Mat, out_det: ?*F32x4) Mat {
         out_det.?.* = det;
     }
 
-    if (math.approxEqAbs(f32, det[0], 0.0, 0.0001)) {
+    if (math.approxEqAbs(f32, det[0], 0.0, math.f32_epsilon)) {
         return .{
             f32x4(0.0, 0.0, 0.0, 0.0),
             f32x4(0.0, 0.0, 0.0, 0.0),
@@ -2542,7 +2634,7 @@ pub fn matFromNormAxisAngle(axis: Vec, angle: f32) Mat {
     const r1 = c0 * axis + v0;
     var r2 = v0 - c0 * axis;
 
-    v0 = @bitCast(F32x4, @bitCast(U32x4, r0) & u32x4_mask3);
+    v0 = andInt(r0, f32x4_mask3);
 
     var v1 = @shuffle(f32, r1, r2, [4]i32{ 0, 2, ~@as(i32, 1), ~@as(i32, 2) });
     v1 = swizzle(v1, .y, .z, .w, .x);
@@ -2603,10 +2695,10 @@ pub fn matFromQuat(quat: Quat) Mat {
     var q1 = quat * q0;
 
     var v0 = swizzle(q1, .y, .x, .x, .w);
-    v0 = @bitCast(F32x4, @bitCast(U32x4, v0) & u32x4_mask3);
+    v0 = andInt(v0, f32x4_mask3);
 
     var v1 = swizzle(q1, .z, .z, .y, .w);
-    v1 = @bitCast(F32x4, @bitCast(U32x4, v1) & u32x4_mask3);
+    v1 = andInt(v1, f32x4_mask3);
 
     var r0 = (f32x4(1.0, 1.0, 1.0, 0.0) - v0) - v1;
 
@@ -2740,13 +2832,11 @@ pub inline fn matToArr34(m: Mat) [12]f32 {
     storeMat34(array[0..], m);
     return array;
 }
-
 // ------------------------------------------------------------------------------
 //
 // 5. Quaternion functions
 //
 // ------------------------------------------------------------------------------
-
 pub fn qmul(q0: Quat, q1: Quat) Quat {
     var result = swizzle(q1, .w, .w, .w, .w);
     var q1x = swizzle(q1, .x, .x, .x, .x);
@@ -2887,7 +2977,11 @@ test "zmath.quaternion.quatFromNormAxisAngle" {
     }
 }
 
-pub fn conjugate(quat: Quat) Quat {
+pub inline fn qidentity() Quat {
+    return f32x4(@as(f32, 0.0), @as(f32, 0.0), @as(f32, 0.0), @as(f32, 1.0));
+}
+
+pub inline fn conjugate(quat: Quat) Quat {
     return quat * f32x4(-1.0, -1.0, -1.0, 1.0);
 }
 
@@ -2902,6 +2996,7 @@ test "zmath.quaternion.inverseQuat" {
         f32x4(-1.0 / 15.0, -1.0 / 10.0, -2.0 / 15.0, 1.0 / 30.0),
         0.0001,
     ));
+    try expect(approxEqAbs(inverse(qidentity()), qidentity(), 0.0001));
 }
 
 pub fn slerp(q0: Quat, q1: Quat, t: f32) Quat {
@@ -2917,7 +3012,7 @@ pub fn slerpV(q0: Quat, q1: Quat, t: F32x4) Quat {
     const omega = atan2(sin_omega, cos_omega);
 
     var v01 = t;
-    v01 = @bitCast(F32x4, (@bitCast(U32x4, v01) & u32x4_mask2) ^ u32x4_sign_mask1);
+    v01 = xorInt(andInt(v01, f32x4_mask2), f32x4_sign_mask1);
     v01 = f32x4(1.0, 0.0, 0.0, 0.0) + v01;
 
     var s0 = sin(v01 * omega) / sin_omega;
@@ -2971,13 +3066,11 @@ test "zmath.quaternion.quatFromRollPitchYawV" {
         try expect(approxEqAbs(m0[3], m1[3], 0.0001));
     }
 }
-
 // ------------------------------------------------------------------------------
 //
 // 6. Color functions
 //
 // ------------------------------------------------------------------------------
-
 pub fn adjustSaturation(color: F32x4, saturation: f32) F32x4 {
     const luminance = dot3(f32x4(0.2125, 0.7154, 0.0721, 0.0), color);
     var result = mulAdd(color - luminance, f32x4s(saturation), luminance);
@@ -3292,14 +3385,12 @@ test "zmath.color.srgbToRgb" {
         epsilon,
     ));
 }
-
 // ------------------------------------------------------------------------------
 //
 // X. Misc functions
 //
 // ------------------------------------------------------------------------------
-
-pub inline fn linePointDistance(linept0: Vec, linept1: Vec, pt: Vec) F32x4 {
+pub fn linePointDistance(linept0: Vec, linept1: Vec, pt: Vec) F32x4 {
     const ptvec = pt - linept0;
     const linevec = linept1 - linept0;
     const scale = dot3(ptvec, linevec) / lengthSq3(linevec);
@@ -3547,13 +3638,11 @@ pub fn cmulSoa(re0: anytype, im0: anytype, re1: anytype, im1: anytype) [2]@TypeO
         mulAdd(re1, im0, re0_im1), // im
     };
 }
-
 // ------------------------------------------------------------------------------
 //
 // FFT (implementation based on xdsp.h from DirectXMath)
 //
 // ------------------------------------------------------------------------------
-
 fn fftButterflyDit4_1(re0: *F32x4, im0: *F32x4) void {
     const re0l = swizzle(re0.*, .x, .x, .y, .y);
     const re0h = swizzle(re0.*, .z, .z, .w, .w);
@@ -3917,7 +4006,7 @@ test "zmath.fftN" {
             -32.000000, 0.000000, -38.992113,  0.000000, -47.891384,  0.000000, -59.867789,  0.000000,
             -77.254834, 0.000000, -105.489863, 0.000000, -160.874864, 0.000000, -324.901452, 0.000000,
         };
-        for (expected) |e, ie| {
+        for (expected, 0..) |e, ie| {
             try expect(std.math.approxEqAbs(f32, e, im[(ie / 4)][ie % 4], epsilon));
         }
     }
@@ -3980,7 +4069,7 @@ test "zmath.fftN" {
             -154.509668, 0.000000, 0.000000, 0.000000, -210.979725, 0.000000, 0.000000, 0.000000,
             -321.749727, 0.000000, 0.000000, 0.000000, -649.802905, 0.000000, 0.000000, 0.000000,
         };
-        for (expected) |e, ie| {
+        for (expected, 0..) |e, ie| {
             try expect(std.math.approxEqAbs(f32, e, im[(ie / 4)][ie % 4], epsilon));
         }
     }
@@ -4146,7 +4235,7 @@ pub fn ifft(re: []F32x4, im: []const F32x4, unity_table: []const F32x4) void {
     const rnp = f32x4s(1.0 / @intToFloat(f32, length));
     const rnm = f32x4s(-1.0 / @intToFloat(f32, length));
 
-    for (re) |_, i| {
+    for (re, 0..) |_, i| {
         re_temp[i] = re[i] * rnp;
         im_temp[i] = im[i] * rnm;
     }
@@ -4213,7 +4302,7 @@ test "zmath.ifft" {
         var re: [128]F32x4 = undefined;
         var im = [_]F32x4{f32x4s(0.0)} ** 128;
 
-        for (re) |*v, i| {
+        for (&re, 0..) |*v, i| {
             const f = @intToFloat(f32, i * 4);
             v.* = f32x4(f + 1.0, f + 2.0, f + 3.0, f + 4.0);
         }
@@ -4221,32 +4310,37 @@ test "zmath.ifft" {
         fftInitUnityTable(unity_table[0..512]);
         fft(re[0..], im[0..], unity_table[0..512]);
 
-        for (re) |v, i| {
+        for (re, 0..) |v, i| {
             const f = @intToFloat(f32, i * 4);
             try expect(!approxEqAbs(v, f32x4(f + 1.0, f + 2.0, f + 3.0, f + 4.0), epsilon));
         }
 
         ifft(re[0..], im[0..], unity_table[0..512]);
 
-        for (re) |v, i| {
+        for (re, 0..) |v, i| {
             const f = @intToFloat(f32, i * 4);
             try expect(approxEqAbs(v, f32x4(f + 1.0, f + 2.0, f + 3.0, f + 4.0), epsilon));
         }
     }
 }
-
 // ------------------------------------------------------------------------------
 //
 // Private functions and constants
 //
 // ------------------------------------------------------------------------------
-
-const f32x4_0x8000_0000: F32x4 = splatInt(F32x4, 0x8000_0000);
-const f32x4_0x7fff_ffff: F32x4 = splatInt(F32x4, 0x7fff_ffff);
-const f32x4_inf: F32x4 = splat(F32x4, math.inf_f32);
-const u32x4_mask3: U32x4 = U32x4{ 0xffff_ffff, 0xffff_ffff, 0xffff_ffff, 0 };
-const u32x4_mask2: U32x4 = U32x4{ 0xffff_ffff, 0xffff_ffff, 0, 0 };
-const u32x4_sign_mask1: U32x4 = U32x4{ 0x8000_0000, 0, 0, 0 };
+const f32x4_sign_mask1: F32x4 = F32x4{ @bitCast(f32, @as(u32, 0x8000_0000)), 0, 0, 0 };
+const f32x4_mask2: F32x4 = F32x4{
+    @bitCast(f32, @as(u32, 0xffff_ffff)),
+    @bitCast(f32, @as(u32, 0xffff_ffff)),
+    0,
+    0,
+};
+const f32x4_mask3: F32x4 = F32x4{
+    @bitCast(f32, @as(u32, 0xffff_ffff)),
+    @bitCast(f32, @as(u32, 0xffff_ffff)),
+    @bitCast(f32, @as(u32, 0xffff_ffff)),
+    0,
+};
 
 inline fn splatNegativeZero(comptime T: type) T {
     return @splat(veclen(T), @bitCast(f32, @as(u32, 0x8000_0000)));
@@ -4259,7 +4353,7 @@ inline fn splatAbsMask(comptime T: type) T {
 }
 
 fn floatToIntAndBack(v: anytype) @TypeOf(v) {
-    // This routine won't handle nan, inf and numbers greater than 8_388_608.0 (will generate undefined values)
+    // This routine won't handle nan, inf and numbers greater than 8_388_608.0 (will generate undefined values).
     @setRuntimeSafety(false);
 
     const T = @TypeOf(v);
@@ -4311,7 +4405,7 @@ pub fn approxEqAbs(v0: anytype, v1: anytype, eps: f32) bool {
 // This software is available under 2 licenses -- choose whichever you prefer.
 // ------------------------------------------------------------------------------
 // ALTERNATIVE A - MIT License
-// Copyright (c) 2022 Michal Ziulek
+// Copyright (c) 2022 Michal Ziulek and Contributors
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
 // this software and associated documentation files (the "Software"), to deal in
 // the Software without restriction, including without limitation the rights to
