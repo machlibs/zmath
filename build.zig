@@ -1,14 +1,15 @@
 const std = @import("std");
 
-pub const pkg = std.build.Pkg{
-    .name = "zmath",
-    .source = .{ .path = thisDir() ++ "/src/zmath.zig" },
-};
+pub fn module(b: *std.Build) *std.build.Module {
+    return b.createModule(.{
+        .source_file = .{ .path = thisDir() ++ "/src/zmath.zig" },
+    });
+}
 
 pub fn build(b: *std.build.Builder) void {
-    const build_mode = b.standardReleaseOptions();
+    const optimize = b.standardOptimizeOption(.{});
     const target = b.standardTargetOptions(.{});
-    const tests = buildTests(b, build_mode, target);
+    const tests = buildTests(b, optimize, target);
 
     const test_step = b.step("test", "Run zmath tests");
     test_step.dependOn(&tests.step);
@@ -16,12 +17,16 @@ pub fn build(b: *std.build.Builder) void {
 
 pub fn buildTests(
     b: *std.build.Builder,
-    build_mode: std.builtin.Mode,
+    optimize: std.builtin.Mode,
     target: std.zig.CrossTarget,
 ) *std.build.LibExeObjStep {
-    const tests = b.addTest(thisDir() ++ "/src/zmath.zig");
-    tests.setBuildMode(build_mode);
-    tests.setTarget(target);
+    const tests = b.addTest(.{
+        .name = "zmath-tests",
+        .kind = .test_exe,
+        .root_source_file = .{ .path = thisDir() ++ "/src/zmath.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
     return tests;
 }
 
@@ -29,10 +34,12 @@ pub fn buildBenchmarks(
     b: *std.build.Builder,
     target: std.zig.CrossTarget,
 ) *std.build.LibExeObjStep {
-    const exe = b.addExecutable("benchmark", thisDir() ++ "/src/benchmark.zig");
-    exe.setBuildMode(std.builtin.Mode.ReleaseFast);
-    exe.setTarget(target);
-    exe.addPackage(pkg);
+    const exe = b.addExecutable(.{
+        .name = "benchmark",
+        .root_source_file = .{ .path = thisDir() ++ "/src/benchmark.zig" },
+        .target = target,
+        .optimize = std.builtin.OptimizeMode.ReleaseFast,
+    });
     return exe;
 }
 
