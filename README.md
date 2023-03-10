@@ -1,9 +1,9 @@
-## NOTE
+-e ## NOTE
 
 this is just a 1:1 copy of the [zmath](https://github.com/michal-z/zig-gamedev/blob/main/libs/zmath) library used for [mach-examples](https://github.com/hexops/mach-examples)
 please don't create PRs for this repository
 
-# zmath v0.9 - SIMD math library for game developers
+# zmath v0.9.5 - SIMD math library for game developers
 
 Tested on x86_64 and AArch64.
 
@@ -27,9 +27,11 @@ Then in your `build.zig` add:
 const std = @import("std");
 const zmath = @import("libs/zmath/build.zig");
 
-pub fn build(b: *std.build.Builder) void {
+pub fn build(b: *std.Build) void {
     ...
-    exe.addPackage(zmath.pkg);
+    const zmath_pkg = zmath.Package.build(b, .{});
+
+    exe.addModule("zmath", zmath_pkg.zmath);
 }
 ```
 
