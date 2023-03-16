@@ -1,5 +1,5 @@
-#!/bin/env sh
-set -ex
+#!/usr/bin/env bash
+set -exuo pipefail
 trap "rm -rf tmp" ERR
 
 git clone https://github.com/michal-z/zig-gamedev --depth 1 tmp
